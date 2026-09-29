@@ -2020,16 +2020,16 @@
 
     /* Multi-select dropdown */
     .ms-wrap { position: relative; display: inline-block; width: 100%; }
-    .ms-btn { width: 100%; text-align: left; padding: 6px 28px 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; box-sizing: border-box; }
+    .ms-btn { width: 100%; text-align: left; padding: 6px 28px 6px 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; box-sizing: border-box; }
     .ms-btn::after { content: '▾'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
-    .ms-panel { position: absolute; z-index: 300; top: calc(100% + 2px); left: 0; min-width: 100%; max-height: 240px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.2); display: none; }
+    .ms-panel { position: absolute; z-index: 300; top: calc(100% + 2px); left: 0; min-width: 100%; max-height: 240px; overflow-y: auto; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.2); display: none; }
     .ms-panel.open { display: block; }
-    .ms-actions { display: flex; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--card-bg); }
-    .ms-actions button { flex: 1; font-size: 11px; padding: 2px 6px; background: none; border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-color); cursor: pointer; }
-    .ms-actions button:hover { background: var(--hover-bg, rgba(0,0,0,.05)); }
+    .ms-actions { display: flex; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--bg-primary); }
+    .ms-actions button { flex: 1; font-size: 11px; padding: 2px 6px; background: none; border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-primary); cursor: pointer; }
+    .ms-actions button:hover { background: var(--bg-secondary); }
     .ms-item { display: flex; align-items: center; gap: 7px; padding: 5px 10px; cursor: pointer; font-size: 13px; white-space: nowrap; }
-    .ms-item:hover { background: var(--hover-bg, rgba(0,0,0,.05)); }
-    .ms-item input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent-color, #0078d4); flex-shrink: 0; }
+    .ms-item:hover { background: var(--bg-secondary); }
+    .ms-item input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent-color); flex-shrink: 0; }
 
     </style>
 </head>
@@ -2165,24 +2165,15 @@
                     </div>
 
                     <div class="filter-group">
-                        <label for="filter-type">Type:</label>
-                        <select id="filter-type">
-                            <option value="all">All</option>
-                            <option value="new">New Entry Only</option>
-                            <option value="added">Added Only</option>
-                        </select>
+                        <label>Type:</label>
+                        <div class="ms-wrap" id="ms-filter-type"></div>
                     </div>
                 </div>
 
                 <div class="filter-row" style="display: flex; gap: 15px; width: 100%;">
                     <div class="filter-group">
-                        <label for="filter-license">License Control:</label>
-                        <select id="filter-license">
-                            <option value="all">All</option>
-                            <option value="removed">Removed Only</option>
-                            <option value="changed">Changed Only</option>
-                            <option value="report">No License</option>
-                        </select>
+                        <label>License Control:</label>
+                        <div class="ms-wrap" id="ms-filter-license"></div>
                     </div>
 
                     <div class="filter-group">
@@ -3154,22 +3145,18 @@
         function saveFilters() {
             const productEl = document.getElementById('filter-product');
             const eidEl = document.getElementById('filter-eid');
-            const typeEl = document.getElementById('filter-type');
 
             if (!productEl) return; // Filters not yet initialized
 
-            const licenseEl = document.getElementById('filter-license');
-            const msRoleVals = msGetValues('filter-role');
-            const msCellVals = msGetValues('filter-cell');
-            const msStatusVals = msGetValues('filter-status');
+            const msToArr = id => { const v = msGetValues(id); return v === null ? ['all'] : [...v]; };
             const filters = {
-                product: productEl ? productEl.value : '',
-                eid: eidEl ? eidEl.value : '',
-                role: msRoleVals === null ? ['all'] : [...msRoleVals],
-                type: typeEl ? typeEl.value : 'all',
-                license: licenseEl ? licenseEl.value : 'all',
-                cell: msCellVals === null ? ['all'] : [...msCellVals],
-                status: msStatusVals === null ? ['all'] : [...msStatusVals]
+                product: productEl.value,
+                eid: eidEl.value,
+                role: msToArr('filter-role'),
+                type: msToArr('filter-type'),
+                license: msToArr('filter-license'),
+                cell: msToArr('filter-cell'),
+                status: msToArr('filter-status')
             };
             localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
         }
@@ -3184,27 +3171,20 @@
                     const filters = JSON.parse(stored);
                     const productEl = document.getElementById('filter-product');
                     const eidEl = document.getElementById('filter-eid');
-                    const typeEl = document.getElementById('filter-type');
 
                     if (filters.product) productEl.value = filters.product;
                     if (filters.eid) eidEl.value = filters.eid;
-                    if (filters.role) {
-                        const arr = Array.isArray(filters.role) ? filters.role : [filters.role];
-                        msSetValues('filter-role', arr[0] === 'all' ? [] : arr);
-                    }
-                    if (filters.type) typeEl.value = filters.type;
-                    const licenseEl = document.getElementById('filter-license');
-                    if (filters.license && licenseEl && licenseEl.querySelector(`option[value="${filters.license}"]`)) {
-                        licenseEl.value = filters.license;
-                    }
-                    if (filters.cell) {
-                        const arr = Array.isArray(filters.cell) ? filters.cell : [filters.cell];
-                        msSetValues('filter-cell', arr[0] === 'all' ? [] : arr);
-                    }
-                    if (filters.status) {
-                        const arr = Array.isArray(filters.status) ? filters.status : [filters.status];
-                        msSetValues('filter-status', arr[0] === 'all' ? [] : arr);
-                    }
+
+                    const restoreMs = (id, val) => {
+                        if (!val) return;
+                        const arr = Array.isArray(val) ? val : [val];
+                        msSetValues(id, arr[0] === 'all' ? [] : arr);
+                    };
+                    restoreMs('filter-role', filters.role);
+                    restoreMs('filter-type', filters.type);
+                    restoreMs('filter-license', filters.license);
+                    restoreMs('filter-cell', filters.cell);
+                    restoreMs('filter-status', filters.status);
                 } catch (e) {
                     console.warn('Could not load saved filters:', e);
                 }
@@ -6660,6 +6640,8 @@
             msInit('filter-role', 'All roles', msChange);
             msInit('filter-cell', 'All Cells', msChange);
             msInit('filter-status', 'All', msChange);
+            msInit('filter-type', 'All', msChange);
+            msInit('filter-license', 'All', msChange);
 
             // Populate role multi-select
             const availableRoles = [...new Set(changes.map(c => c.role))];
@@ -6670,8 +6652,18 @@
             const availableCells = [...new Set(changes.map(c => determineCell(c.component, c.serviceArea)).filter(c => c))].sort();
             msPopulate('filter-cell', availableCells);
 
-            // Populate status multi-select (fixed options)
+            // Populate fixed multi-selects
             msPopulate('filter-status', ['Certification Complete', 'Chartered', 'New', 'Sunset']);
+            msPopulate('filter-type', [
+                { value: 'new', label: 'New Entry Only' },
+                { value: 'added', label: 'Added Only' },
+                { value: 'newproduct', label: 'New Products' }
+            ]);
+            msPopulate('filter-license', [
+                { value: 'removed', label: 'Removed Only' },
+                { value: 'changed', label: 'Changed Only' },
+                { value: 'report', label: 'No License' }
+            ]);
 
             // Mostrar la tabla con todos los cambios
             displayTable(changes);
@@ -6679,8 +6671,6 @@
             // Add event listeners for filters
             document.getElementById('filter-product').addEventListener('input', () => { filterResults(); saveFilters(); });
             document.getElementById('filter-eid').addEventListener('input', () => { filterResults(); saveFilters(); });
-            document.getElementById('filter-type').addEventListener('change', () => { filterResults(); saveFilters(); });
-            document.getElementById('filter-license').addEventListener('change', () => { filterResults(); saveFilters(); });
 
             // Apply defaults (localStorage will override these in loadFilters if saved)
             if (sortedRoles.includes('PM')) msSetValues('filter-role', ['PM']);
@@ -6730,8 +6720,12 @@
             const roleValues = msGetValues('filter-role');    // null = all
             const cellValues = msGetValues('filter-cell');
             const statusValues = msGetValues('filter-status');
-            const licenseFilter = document.getElementById('filter-license').value;
-            const typeFilter = licenseFilter !== 'all' ? licenseFilter : document.getElementById('filter-type').value;
+            const typeValues = msGetValues('filter-type');       // null = all
+            const licenseValues = msGetValues('filter-license'); // null = all
+            // Combined set of all selected type/license values; null means no restriction
+            const allTypeVals = (typeValues === null && licenseValues === null) ? null
+                : new Set([...(typeValues || []), ...(licenseValues || [])]);
+            const hasTypeFilter = allTypeVals !== null && allTypeVals.size > 0;
 
             // Comenzar con todos los cambios
             // Las entradas status_only solo son relevantes cuando hay un filtro de Status activo
@@ -6775,36 +6769,43 @@
                 );
             }
 
-            // FILTRO 6: Por Tipo de cambio
-            if (typeFilter === 'report') {
-                // Filtro especial: solo personas que deben removerse de Jira Align
-                // (personas removidas que no existen en ningún otro Product ID)
-                filtered = filtered
-                    .filter(c => c.changeType === 'removed' || c.changeType === 'changed')
-                    .map(c => {
-                        // Filtrar solo las personas que necesitan ser reportadas
-                        const peopleToReport = c.removedPeople.filter(person => {
-                            const locations = findPersonInCurrentFile(person);
-                            return locations.length === 0;
-                        });
-                        // Retornar una copia del cambio con solo las personas a reportar
-                        return { ...c, removedPeople: peopleToReport };
-                    })
-                    .filter(c => c.removedPeople.length > 0); // Solo cambios con personas a reportar
-            } else if (typeFilter === 'newproduct') {
-                // Filtro especial: solo productos nuevos (no existían en el archivo anterior)
-                filtered = filtered.filter(c => !oldProductIds.has(c.productId.toString()));
-            } else if (typeFilter !== 'all') {
-                // Filtros estándar: new, added, removed, changed
-                filtered = filtered.filter(c => c.changeType === typeFilter);
+            // FILTRO 6: Por Tipo de cambio (union of type + license selections)
+            if (hasTypeFilter) {
+                let typeFiltered = [];
+                // Special: 'report' = removed people not present in any other product
+                if (allTypeVals.has('report')) {
+                    const reportRows = filtered
+                        .filter(c => c.changeType === 'removed' || c.changeType === 'changed')
+                        .map(c => ({
+                            ...c,
+                            removedPeople: c.removedPeople.filter(person => findPersonInCurrentFile(person).length === 0)
+                        }))
+                        .filter(c => c.removedPeople.length > 0);
+                    typeFiltered = [...typeFiltered, ...reportRows];
+                }
+                // Special: 'newproduct' = products not in previous file
+                if (allTypeVals.has('newproduct')) {
+                    typeFiltered = [...typeFiltered, ...filtered.filter(c => !oldProductIds.has(c.productId.toString()))];
+                }
+                // Standard changeType values
+                const stdTypes = [...allTypeVals].filter(v => v !== 'report' && v !== 'newproduct');
+                if (stdTypes.length > 0) {
+                    typeFiltered = [...typeFiltered, ...filtered.filter(c => stdTypes.includes(c.changeType))];
+                }
+                // Deduplicate preserving order
+                const seen = new Set();
+                filtered = typeFiltered.filter(c => {
+                    const key = `${c.productId}-${c.role}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
             }
 
             // Mostrar/ocultar botones de email según si hay filtro activo
-            // const emailBtn = document.getElementById('email-btn');
             const autoSendBtn = document.getElementById('auto-send-btn');
             const serverStatus = document.getElementById('server-status');
-            const showEmailBtns = typeFilter !== 'all';
-            // emailBtn.style.display = showEmailBtns ? 'inline-block' : 'none';
+            const showEmailBtns = hasTypeFilter;
             autoSendBtn.style.display = showEmailBtns ? 'inline-block' : 'none';
             serverStatus.style.display = showEmailBtns ? 'inline-block' : 'none';
 
@@ -6842,8 +6843,7 @@
 
             // Sync role distribution chart with current filters
             if (typeof window.syncRdistWithFilter === 'function') {
-                const typeOrLicenseActive = typeFilter !== 'all' || licenseFilter !== 'all';
-                const filteredProductIds = typeOrLicenseActive ? new Set(filtered.map(c => c.productId.toString())) : null;
+                const filteredProductIds = hasTypeFilter ? new Set(filtered.map(c => c.productId.toString())) : null;
                 // For chart: use single role string (chart shows one role at a time)
                 const singleRole = roleValues === null ? 'all' : (roleValues.size === 1 ? [...roleValues][0] : 'multi');
                 const singleStatus = statusValues === null ? 'all' : (statusValues.size === 1 ? [...statusValues][0] : statusValues.size > 1 ? 'multi' : 'all');
@@ -7833,8 +7833,11 @@ Link: https://teams.microsoft.com/l/message/19:10a2fb6c-51a1-4059-bbc3-1b58d0e3a
                 try {
                     // Obtener valores de los filtros actuales
                     const exportRoleValues = msGetValues('filter-role');
-                    const licenseFilter = document.getElementById('filter-license').value;
-                    const typeFilter = licenseFilter !== 'all' ? licenseFilter : document.getElementById('filter-type').value;
+                    const exportTypeVals = msGetValues('filter-type');
+                    const exportLicVals  = msGetValues('filter-license');
+                    const exportAllTypeVals = (exportTypeVals === null && exportLicVals === null) ? null
+                        : new Set([...(exportTypeVals || []), ...(exportLicVals || [])]);
+                    const exportHasType = exportAllTypeVals !== null && exportAllTypeVals.size > 0;
 
                     // Aplicar filtros
                     let dataToExport = allChanges;
@@ -7843,26 +7846,26 @@ Link: https://teams.microsoft.com/l/message/19:10a2fb6c-51a1-4059-bbc3-1b58d0e3a
                         dataToExport = dataToExport.filter(c => exportRoleValues.has(c.role));
                     }
 
-                    // Filtro por tipo de cambio (con lógica especial para 'report' y 'newproduct')
-                    if (typeFilter === 'report') {
-                        // Filtro especial: personas removidas que no existen en ningún otro Product ID
-                        dataToExport = dataToExport
-                            .filter(c => c.changeType === 'removed' || c.changeType === 'changed')
-                            .map(c => {
-                                const peopleToReport = c.removedPeople.filter(person => {
-                                    const locations = findPersonInCurrentFile(person);
-                                    return locations.length === 0;
-                                });
-                                return { ...c, removedPeople: peopleToReport };
-                            })
-                            .filter(c => c.removedPeople.length > 0);
-                    } else if (typeFilter === 'newproduct') {
-                        // Filtro especial: solo productos nuevos
-                        dataToExport = dataToExport.filter(c => !oldProductIds.has(c.productId.toString()));
-                    } else if (typeFilter !== 'all') {
-                        // Filtros estándar: new, added, removed, changed
-                        dataToExport = dataToExport.filter(c => c.changeType === typeFilter);
+                    // Filtro por tipo de cambio
+                    if (exportHasType) {
+                        let typeFiltered = [];
+                        if (exportAllTypeVals.has('report')) {
+                            typeFiltered = [...typeFiltered, ...dataToExport
+                                .filter(c => c.changeType === 'removed' || c.changeType === 'changed')
+                                .map(c => ({ ...c, removedPeople: c.removedPeople.filter(p => findPersonInCurrentFile(p).length === 0) }))
+                                .filter(c => c.removedPeople.length > 0)];
+                        }
+                        if (exportAllTypeVals.has('newproduct')) {
+                            typeFiltered = [...typeFiltered, ...dataToExport.filter(c => !oldProductIds.has(c.productId.toString()))];
+                        }
+                        const stdTypes = [...exportAllTypeVals].filter(v => v !== 'report' && v !== 'newproduct');
+                        if (stdTypes.length > 0) {
+                            typeFiltered = [...typeFiltered, ...dataToExport.filter(c => stdTypes.includes(c.changeType))];
+                        }
+                        const seenExp = new Set();
+                        dataToExport = typeFiltered.filter(c => { const k = `${c.productId}-${c.role}`; if (seenExp.has(k)) return false; seenExp.add(k); return true; });
                     }
+                    const typeFilter = exportHasType && exportAllTypeVals.has('report') ? 'report' : 'other';
 
                     // Transformar los datos al formato de exportación (sin HTML)
                     const exportData = dataToExport.map(change => {
