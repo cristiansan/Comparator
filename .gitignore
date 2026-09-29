@@ -1,0 +1,11 @@
+# Sensitive data files
+*.xlsx
+*.xls
+*.csv
+*.pdf
+
+# Claude internal metadata
+.claude/
+
+# Backup copies
+backup/
