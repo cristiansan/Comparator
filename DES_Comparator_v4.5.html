@@ -5848,7 +5848,9 @@
                 headers.forEach((header, index) => {
                     // Saltar la columna de Product ID, columnas sin encabezado, y columnas a ignorar
                     if (index === productIdIndex || !header) return;
-                    if (columnsToIgnore.includes(header.toString().toLowerCase())) return;
+                    const headerStr = header.toString();
+                    if (columnsToIgnore.includes(headerStr.toLowerCase())) return;
+                    if (!/[a-zA-Z0-9]/.test(headerStr)) return;
 
                     // Obtener y normalizar los valores antiguos y nuevos
                     const oldValue = (oldRecord[header] || '').toString().trim();
@@ -6643,8 +6645,8 @@
             msInit('filter-type', 'All', msChange);
             msInit('filter-license', 'All', msChange);
 
-            // Populate role multi-select
-            const availableRoles = [...new Set(changes.map(c => c.role))];
+            // Populate role multi-select (exclude headers with no alphanumeric chars)
+            const availableRoles = [...new Set(changes.map(c => c.role))].filter(r => /[a-zA-Z0-9]/.test(r));
             const sortedRoles = availableRoles.sort((a, b) => getRoleOrder(a) - getRoleOrder(b));
             msPopulate('filter-role', sortedRoles);
 
