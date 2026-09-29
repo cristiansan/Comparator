@@ -2018,6 +2018,19 @@
     .rdist-drill-btn-copy.copied { border-color: var(--success-color); color: var(--success-color); }
     .rdist-drill-btn-email { font-weight: 700; min-width: 36px; }
 
+    /* Multi-select dropdown */
+    .ms-wrap { position: relative; display: inline-block; width: 100%; }
+    .ms-btn { width: 100%; text-align: left; padding: 6px 28px 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; box-sizing: border-box; }
+    .ms-btn::after { content: '▾'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+    .ms-panel { position: absolute; z-index: 300; top: calc(100% + 2px); left: 0; min-width: 100%; max-height: 240px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.2); display: none; }
+    .ms-panel.open { display: block; }
+    .ms-actions { display: flex; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--card-bg); }
+    .ms-actions button { flex: 1; font-size: 11px; padding: 2px 6px; background: none; border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-color); cursor: pointer; }
+    .ms-actions button:hover { background: var(--hover-bg, rgba(0,0,0,.05)); }
+    .ms-item { display: flex; align-items: center; gap: 7px; padding: 5px 10px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+    .ms-item:hover { background: var(--hover-bg, rgba(0,0,0,.05)); }
+    .ms-item input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent-color, #0078d4); flex-shrink: 0; }
+
     </style>
 </head>
 <body>
@@ -2147,10 +2160,8 @@
 
                 <div class="filter-row" style="display: flex; gap: 15px; width: 100%; margin-bottom: 10px;">
                     <div class="filter-group">
-                        <label for="filter-role">Role:</label>
-                        <select id="filter-role">
-                            <option value="all">All roles</option>
-                        </select>
+                        <label>Role:</label>
+                        <div class="ms-wrap" id="ms-filter-role"></div>
                     </div>
 
                     <div class="filter-group">
@@ -2175,21 +2186,13 @@
                     </div>
 
                     <div class="filter-group">
-                        <label for="filter-cell">Cell:</label>
-                        <select id="filter-cell">
-                            <option value="all">All Cells</option>
-                        </select>
+                        <label>Cell:</label>
+                        <div class="ms-wrap" id="ms-filter-cell"></div>
                     </div>
 
                     <div class="filter-group">
-                        <label for="filter-status">Status:</label>
-                        <select id="filter-status">
-                            <option value="all">All</option>
-                            <option value="Certification Complete">Certification Complete</option>
-                            <option value="Chartered">Chartered</option>
-                            <option value="New">New</option>
-                            <option value="Sunset">Sunset</option>
-                        </select>
+                        <label>Status:</label>
+                        <div class="ms-wrap" id="ms-filter-status"></div>
                     </div>
                 </div>
             </div>
@@ -3151,22 +3154,22 @@
         function saveFilters() {
             const productEl = document.getElementById('filter-product');
             const eidEl = document.getElementById('filter-eid');
-            const roleEl = document.getElementById('filter-role');
             const typeEl = document.getElementById('filter-type');
-            const cellEl = document.getElementById('filter-cell');
-            const statusEl = document.getElementById('filter-status');
 
             if (!productEl) return; // Filters not yet initialized
 
             const licenseEl = document.getElementById('filter-license');
+            const msRoleVals = msGetValues('filter-role');
+            const msCellVals = msGetValues('filter-cell');
+            const msStatusVals = msGetValues('filter-status');
             const filters = {
-                product: productEl.value,
-                eid: eidEl.value,
-                role: roleEl.value,
-                type: typeEl.value,
+                product: productEl ? productEl.value : '',
+                eid: eidEl ? eidEl.value : '',
+                role: msRoleVals === null ? ['all'] : [...msRoleVals],
+                type: typeEl ? typeEl.value : 'all',
                 license: licenseEl ? licenseEl.value : 'all',
-                cell: cellEl.value,
-                status: statusEl ? statusEl.value : 'all'
+                cell: msCellVals === null ? ['all'] : [...msCellVals],
+                status: msStatusVals === null ? ['all'] : [...msStatusVals]
             };
             localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
         }
@@ -3181,26 +3184,26 @@
                     const filters = JSON.parse(stored);
                     const productEl = document.getElementById('filter-product');
                     const eidEl = document.getElementById('filter-eid');
-                    const roleEl = document.getElementById('filter-role');
                     const typeEl = document.getElementById('filter-type');
-                    const cellEl = document.getElementById('filter-cell');
-                    const statusEl = document.getElementById('filter-status');
 
                     if (filters.product) productEl.value = filters.product;
                     if (filters.eid) eidEl.value = filters.eid;
-                    if (filters.role && roleEl.querySelector(`option[value="${filters.role}"]`)) {
-                        roleEl.value = filters.role;
+                    if (filters.role) {
+                        const arr = Array.isArray(filters.role) ? filters.role : [filters.role];
+                        msSetValues('filter-role', arr[0] === 'all' ? [] : arr);
                     }
                     if (filters.type) typeEl.value = filters.type;
                     const licenseEl = document.getElementById('filter-license');
                     if (filters.license && licenseEl && licenseEl.querySelector(`option[value="${filters.license}"]`)) {
                         licenseEl.value = filters.license;
                     }
-                    if (filters.cell && cellEl.querySelector(`option[value="${filters.cell}"]`)) {
-                        cellEl.value = filters.cell;
+                    if (filters.cell) {
+                        const arr = Array.isArray(filters.cell) ? filters.cell : [filters.cell];
+                        msSetValues('filter-cell', arr[0] === 'all' ? [] : arr);
                     }
-                    if (filters.status && statusEl && statusEl.querySelector(`option[value="${filters.status}"]`)) {
-                        statusEl.value = filters.status;
+                    if (filters.status) {
+                        const arr = Array.isArray(filters.status) ? filters.status : [filters.status];
+                        msSetValues('filter-status', arr[0] === 'all' ? [] : arr);
                     }
                 } catch (e) {
                     console.warn('Could not load saved filters:', e);
@@ -6652,45 +6655,36 @@
                 return 99; // Otros roles al final
             };
 
-            // Poblar el dropdown de filtro de roles con los roles disponibles (ordenados)
+            // Init multi-select widgets (must come before msPopulate)
+            const msChange = () => { filterResults(); saveFilters(); };
+            msInit('filter-role', 'All roles', msChange);
+            msInit('filter-cell', 'All Cells', msChange);
+            msInit('filter-status', 'All', msChange);
+
+            // Populate role multi-select
             const availableRoles = [...new Set(changes.map(c => c.role))];
             const sortedRoles = availableRoles.sort((a, b) => getRoleOrder(a) - getRoleOrder(b));
-            const roleFilter = document.getElementById('filter-role');
-            roleFilter.innerHTML = '<option value="all">All roles</option>';
-            sortedRoles.forEach(role => {
-                roleFilter.innerHTML += `<option value="${role}">${role}</option>`;
-            });
+            msPopulate('filter-role', sortedRoles);
 
-            // Poblar el dropdown de filtro de Cells con las Cells disponibles
-            const availableCells = [...new Set(changes.map(c => determineCell(c.component, c.serviceArea)).filter(c => c))];
-            const cellFilter = document.getElementById('filter-cell');
-            cellFilter.innerHTML = '<option value="all">All Cells</option>';
-            availableCells.sort().forEach(cell => {
-                cellFilter.innerHTML += `<option value="${cell}">${cell}</option>`;
-            });
+            // Populate cell multi-select
+            const availableCells = [...new Set(changes.map(c => determineCell(c.component, c.serviceArea)).filter(c => c))].sort();
+            msPopulate('filter-cell', availableCells);
+
+            // Populate status multi-select (fixed options)
+            msPopulate('filter-status', ['Certification Complete', 'Chartered', 'New', 'Sunset']);
 
             // Mostrar la tabla con todos los cambios
             displayTable(changes);
 
-            // Agregar event listeners para los filtros y botones de acción
             // Add event listeners for filters
             document.getElementById('filter-product').addEventListener('input', () => { filterResults(); saveFilters(); });
             document.getElementById('filter-eid').addEventListener('input', () => { filterResults(); saveFilters(); });
-            document.getElementById('filter-role').addEventListener('change', () => { filterResults(); saveFilters(); });
             document.getElementById('filter-type').addEventListener('change', () => { filterResults(); saveFilters(); });
             document.getElementById('filter-license').addEventListener('change', () => { filterResults(); saveFilters(); });
-            document.getElementById('filter-cell').addEventListener('change', () => { filterResults(); saveFilters(); });
-            document.getElementById('filter-status').addEventListener('change', () => { filterResults(); saveFilters(); });
 
-            // Apply defaults before restoring saved filters (localStorage overrides these)
-            const roleEl2 = document.getElementById('filter-role');
-            if (roleEl2 && roleEl2.value === 'all' && roleEl2.querySelector('option[value="PM"]')) {
-                roleEl2.value = 'PM';
-            }
-            const statusEl2 = document.getElementById('filter-status');
-            if (statusEl2 && statusEl2.value === 'all') {
-                statusEl2.value = 'Certification Complete';
-            }
+            // Apply defaults (localStorage will override these in loadFilters if saved)
+            if (sortedRoles.includes('PM')) msSetValues('filter-role', ['PM']);
+            msSetValues('filter-status', ['Certification Complete']);
 
             // Load saved filters and apply them
             loadFilters();
@@ -6733,15 +6727,15 @@
             // Obtener valores de los filtros
             const productFilter = document.getElementById('filter-product').value.trim();
             const eidFilter = document.getElementById('filter-eid').value.trim().toLowerCase();
-            const roleFilter = document.getElementById('filter-role').value;
+            const roleValues = msGetValues('filter-role');    // null = all
+            const cellValues = msGetValues('filter-cell');
+            const statusValues = msGetValues('filter-status');
             const licenseFilter = document.getElementById('filter-license').value;
             const typeFilter = licenseFilter !== 'all' ? licenseFilter : document.getElementById('filter-type').value;
-            const cellFilter = document.getElementById('filter-cell').value;
-            const statusFilter = document.getElementById('filter-status').value;
 
             // Comenzar con todos los cambios
             // Las entradas status_only solo son relevantes cuando hay un filtro de Status activo
-            let filtered = statusFilter === 'all'
+            let filtered = (statusValues === null)
                 ? allChanges.filter(c => c.changeType !== 'status_only')
                 : allChanges;
 
@@ -6765,19 +6759,19 @@
             }
 
             // FILTRO 3: Por Rol
-            if (roleFilter !== 'all') {
-                filtered = filtered.filter(c => c.role === roleFilter);
+            if (roleValues !== null && roleValues.size > 0) {
+                filtered = filtered.filter(c => roleValues.has(c.role));
             }
 
             // FILTRO 4: Por Cell
-            if (cellFilter !== 'all') {
-                filtered = filtered.filter(c => determineCell(c.component, c.serviceArea) === cellFilter);
+            if (cellValues !== null && cellValues.size > 0) {
+                filtered = filtered.filter(c => cellValues.has(determineCell(c.component, c.serviceArea)));
             }
 
             // FILTRO 5: Por Status de certificación
-            if (statusFilter !== 'all') {
+            if (statusValues !== null && statusValues.size > 0) {
                 filtered = filtered.filter(c =>
-                    (c.certificationStatus || '').trim() === statusFilter
+                    statusValues.has((c.certificationStatus || '').trim())
                 );
             }
 
@@ -6849,10 +6843,12 @@
             // Sync role distribution chart with current filters
             if (typeof window.syncRdistWithFilter === 'function') {
                 const typeOrLicenseActive = typeFilter !== 'all' || licenseFilter !== 'all';
-                const filteredProductIds = typeOrLicenseActive
-                    ? new Set(filtered.map(c => c.productId.toString()))
-                    : null;
-                window.syncRdistWithFilter(roleFilter, productFilter, statusFilter, cellFilter, eidFilter, filteredProductIds);
+                const filteredProductIds = typeOrLicenseActive ? new Set(filtered.map(c => c.productId.toString())) : null;
+                // For chart: use single role string (chart shows one role at a time)
+                const singleRole = roleValues === null ? 'all' : (roleValues.size === 1 ? [...roleValues][0] : 'multi');
+                const singleStatus = statusValues === null ? 'all' : (statusValues.size === 1 ? [...statusValues][0] : statusValues.size > 1 ? 'multi' : 'all');
+                const singleCell = cellValues === null ? 'all' : (cellValues.size === 1 ? [...cellValues][0] : 'multi');
+                window.syncRdistWithFilter(singleRole, productFilter, singleStatus, singleCell, eidFilter, filteredProductIds);
             }
         }
 
@@ -7836,15 +7832,15 @@ Link: https://teams.microsoft.com/l/message/19:10a2fb6c-51a1-4059-bbc3-1b58d0e3a
             setTimeout(() => {
                 try {
                     // Obtener valores de los filtros actuales
-                    const roleFilter = document.getElementById('filter-role').value;
+                    const exportRoleValues = msGetValues('filter-role');
                     const licenseFilter = document.getElementById('filter-license').value;
                     const typeFilter = licenseFilter !== 'all' ? licenseFilter : document.getElementById('filter-type').value;
 
                     // Aplicar filtros
                     let dataToExport = allChanges;
 
-                    if (roleFilter !== 'all') {
-                        dataToExport = dataToExport.filter(c => c.role === roleFilter);
+                    if (exportRoleValues !== null && exportRoleValues.size > 0) {
+                        dataToExport = dataToExport.filter(c => exportRoleValues.has(c.role));
                     }
 
                     // Filtro por tipo de cambio (con lógica especial para 'report' y 'newproduct')
@@ -8872,8 +8868,8 @@ If your product does not yet have access, please ensure your artifacts are store
             const btn = document.getElementById('rdist-open-btn');
             if (btn) btn.style.display = 'inline-block';
 
-            const roleFilterEl = document.getElementById('filter-role');
-            const role = roleFilterEl ? roleFilterEl.value : '';
+            const rdistRoleValues = msGetValues('filter-role');
+            const role = rdistRoleValues !== null && rdistRoleValues.size === 1 ? [...rdistRoleValues][0] : '';
             if (role && role !== 'all') {
                 renderRdistChart(role);
             } else {
@@ -9320,12 +9316,11 @@ If your product does not yet have access, please ensure your artifacts are store
                 .slice(0, 5);
 
             // Active filters summary
-            const roleFilterEl   = document.getElementById('filter-role');
-            const statusFilterEl = document.getElementById('filter-status');
-            const cellFilterEl   = document.getElementById('filter-cell');
+            const emailStatusVals = msGetValues('filter-status');
+            const emailCellVals   = msGetValues('filter-cell');
             const activeFilters  = [
-                statusFilterEl && statusFilterEl.value !== 'all' ? `Status: ${statusFilterEl.value}` : '',
-                cellFilterEl   && cellFilterEl.value   !== 'all' ? `Cell: ${cellFilterEl.value}`     : '',
+                emailStatusVals !== null && emailStatusVals.size > 0 ? `Status: ${[...emailStatusVals].join(', ')}` : '',
+                emailCellVals   !== null && emailCellVals.size > 0   ? `Cell: ${[...emailCellVals].join(', ')}`     : '',
             ].filter(Boolean).join(' · ');
 
             const subject = `DES Role Distribution – ${rdistCurrentRole} data`;
@@ -9366,6 +9361,116 @@ If your product does not yet have access, please ensure your artifacts are store
         window.syncRdistWithFilter   = syncRdistWithFilter;
 
         })();
+
+        // ============================================
+        // MULTI-SELECT WIDGET UTILITIES (global)
+        // ============================================
+
+        const _msState = {};
+
+        function msInit(id, placeholder, onChange) {
+            const wrap = document.getElementById('ms-' + id);
+            if (!wrap) return;
+            _msState[id] = { options: [], selected: null, placeholder, onChange, wrap };
+            const html = `<button class="ms-btn" type="button">${placeholder}</button>` +
+                `<div class="ms-panel" id="ms-panel-${id}">` +
+                `<div class="ms-actions"><button type="button" onclick="_msAll('${id}')">All</button>` +
+                `<button type="button" onclick="_msNone('${id}')">None</button></div>` +
+                `<div id="ms-items-${id}"></div></div>`;
+            wrap.innerHTML = html;
+            wrap.querySelector('.ms-btn').addEventListener('click', e => { e.stopPropagation(); _msToggle(id); });
+            document.addEventListener('click', e => { if (!wrap.contains(e.target)) _msClose(id); });
+        }
+
+        function _msToggle(id) {
+            const panel = document.getElementById('ms-panel-' + id);
+            if (!panel) return;
+            const isOpen = panel.classList.contains('open');
+            Object.keys(_msState).forEach(k => document.getElementById('ms-panel-' + k)?.classList.remove('open'));
+            if (!isOpen) panel.classList.add('open');
+        }
+
+        function _msClose(id) {
+            document.getElementById('ms-panel-' + id)?.classList.remove('open');
+        }
+
+        function msPopulate(id, options, defaultSelected) {
+            const state = _msState[id];
+            if (!state) return;
+            state.options = options.map(o => typeof o === 'string' ? { value: o, label: o } : o);
+            state.selected = (defaultSelected && defaultSelected.length) ? new Set(defaultSelected) : null;
+            _msRender(id);
+            _msUpdateBtn(id);
+        }
+
+        function _msRender(id) {
+            const state = _msState[id];
+            const container = document.getElementById('ms-items-' + id);
+            if (!container) return;
+            container.innerHTML = state.options.map(o => {
+                const checked = state.selected === null || state.selected.has(o.value);
+                return `<label class="ms-item"><input type="checkbox" value="${o.value.replace(/"/g,'&quot;')}" ${checked ? 'checked' : ''} onchange="_msChange('${id}',this)"> ${o.label}</label>`;
+            }).join('');
+        }
+
+        function _msChange(id, cb) {
+            const state = _msState[id];
+            const allVals = state.options.map(o => o.value);
+            const checked = [...document.querySelectorAll(`#ms-items-${id} input:checked`)].map(i => i.value);
+            state.selected = checked.length === allVals.length ? null : new Set(checked);
+            _msUpdateBtn(id);
+            if (state.onChange) state.onChange();
+        }
+
+        function _msAll(id) {
+            const state = _msState[id];
+            if (!state) return;
+            state.selected = null;
+            _msRender(id);
+            _msUpdateBtn(id);
+            if (state.onChange) state.onChange();
+        }
+
+        function _msNone(id) {
+            const state = _msState[id];
+            if (!state) return;
+            state.selected = new Set();
+            _msRender(id);
+            _msUpdateBtn(id);
+            if (state.onChange) state.onChange();
+        }
+
+        function msGetValues(id) {
+            return _msState[id]?.selected ?? null; // null = all
+        }
+
+        function msSetValues(id, arr) {
+            const state = _msState[id];
+            if (!state) return;
+            if (!arr || !arr.length || arr[0] === 'all') {
+                state.selected = null;
+            } else {
+                state.selected = new Set(arr);
+            }
+            _msRender(id);
+            _msUpdateBtn(id);
+        }
+
+        function _msUpdateBtn(id) {
+            const state = _msState[id];
+            if (!state) return;
+            const btn = state.wrap.querySelector('.ms-btn');
+            if (!btn) return;
+            if (state.selected === null) {
+                btn.textContent = state.placeholder;
+            } else if (state.selected.size === 0) {
+                btn.textContent = 'None selected';
+            } else if (state.selected.size === 1) {
+                btn.textContent = [...state.selected][0];
+            } else {
+                btn.textContent = `${state.selected.size} selected`;
+            }
+        }
 
     </script>
 </body>
