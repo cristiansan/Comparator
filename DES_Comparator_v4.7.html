@@ -1889,7 +1889,7 @@
     }
     .rdist-stat .rs-val { font-size: 20px; font-weight: 700; line-height: 1; margin-bottom: 2px; }
     .rdist-stat .rs-sub { font-size: 11px; color: var(--text-muted); }
-    .rdist-chart-wrap { position: relative; height: 220px; }
+    .rdist-chart-wrap { position: relative; height: 450px; }
     .rdist-legend {
         display: flex;
         gap: 14px;
@@ -2141,9 +2141,8 @@
                         <canvas id="rdist-chart"></canvas>
                     </div>
                     <div class="rdist-legend">
-                        <span><span class="dot" style="background:#00c9a7"></span>≤ 10</span>
-                        <span><span class="dot" style="background:#e67e22"></span>11–15</span>
-                        <span><span class="dot" style="background:#e74c3c"></span>&gt; 15</span>
+                        <span onclick="showRdistDrillOver(10)" style="cursor:pointer;text-decoration:underline dotted" title="Click to see all products with more than 10"><span class="dot" style="background:#e74c3c"></span>&gt; 10</span>
+                        <span onclick="showRdistDrillUpTo(10)" style="cursor:pointer;text-decoration:underline dotted" title="Click to see all products with 10 or fewer"><span class="dot" style="background:#00c9a7"></span>≤ 10</span>
                     </div>
                 </div>
             </div>
@@ -8853,6 +8852,8 @@ If your product does not yet have access, please ensure your artifacts are store
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn('[RoleDist] Chart.js unavailable:', e); }
 
         let rdistChart = null;
+        let rdistExtraCharts = [];
+        let rdistFilteredView = false;
         let rdistProductMap = null;
         let rdistRoleBreakdown = null; // productId -> roleName -> Map when multi-role
         let rdistCurrentCount = null;
@@ -8886,9 +8887,14 @@ If your product does not yet have access, please ensure your artifacts are store
             if (btn) btn.style.display = 'inline-block';
 
             const rdistRoleValues = msGetValues('filter-role');
-            const role = rdistRoleValues !== null && rdistRoleValues.size === 1 ? [...rdistRoleValues][0] : '';
-            if (role && role !== 'all') {
-                renderRdistChart(role);
+            if (rdistRoleValues !== null && rdistRoleValues.size > 0) {
+                renderRdistChart([...rdistRoleValues].join(','));
+            } else if (file2Data && file2Data[0]) {
+                const h = file2Data[0].map(x => x ? x.toString().trim() : '');
+                const roleCols = h.filter(c => c && !RDIST_META_RE.test(c) && !/^[-–—\s]+$/.test(c));
+                if (roleCols.length) renderRdistChart(roleCols.join(','));
+                else document.getElementById('rdist-stats').innerHTML =
+                    '<div style="color:var(--text-muted);font-size:13px;padding:6px 0">Select a role in the Role filter above to see the distribution.</div>';
             } else {
                 document.getElementById('rdist-stats').innerHTML =
                     '<div style="color:var(--text-muted);font-size:13px;padding:6px 0">Select a role in the Role filter above to see the distribution.</div>';
@@ -8910,6 +8916,18 @@ If your product does not yet have access, please ensure your artifacts are store
         function renderRdistChart(roleColName) {
             // roleColName may be a comma-separated list of roles (multi-select)
             const roleNames = roleColName.split(',').map(r => r.trim()).filter(Boolean);
+
+            // Reset filtered view if active
+            if (rdistFilteredView) {
+                rdistExtraCharts.forEach(c => c.destroy());
+                rdistExtraCharts = [];
+                rdistFilteredView = false;
+                const wrap = document.querySelector('.rdist-chart-wrap');
+                if (wrap) {
+                    wrap.style.height = '450px';
+                    wrap.innerHTML = '<canvas id="rdist-chart"></canvas>';
+                }
+            }
 
             if (typeof Chart === 'undefined') {
                 document.getElementById('rdist-stats').innerHTML =
@@ -9015,17 +9033,29 @@ If your product does not yet have access, please ensure your artifacts are store
             // Compact histogram, highest count on left
             const activeBins = [...new Set(counts)].sort((a, b) => b - a);
             const binCts     = activeBins.map(b => counts.filter(c => c === b).length);
-            const barFill    = activeBins.map(b => b > 15 ? '#e74c3c55' : b > 10 ? '#e67e2244' : '#00c9a744');
-            const barBorder  = activeBins.map(b => b > 15 ? '#e74c3c'   : b > 10 ? '#e67e22'   : '#00c9a7');
+            const barFill    = activeBins.map(b => b > 10 ? '#e74c3c55' : '#00c9a744');
+            const barBorder  = activeBins.map(b => b > 10 ? '#e74c3c'   : '#00c9a7');
 
-            // Product IDs per bin for inside-bar labels (up to 5, then "...")
-            const MAX_IN_BAR = 5;
-            const binProducts = activeBins.map(b =>
-                Object.entries(productPeople)
+            // Product IDs per bin — pre-calculate text to show inside each bar
+            const chartAreaH = 370; // approx usable bar area (450px container - axes/padding)
+            const yMax = Math.max(Math.ceil(Math.max(...binCts) / 3) * 3, 3);
+            const binLabels = activeBins.map((b, i) => {
+                const prods = Object.entries(productPeople)
                     .filter(([, m]) => m.size === b)
                     .map(([pid]) => pid)
-                    .sort()
-            );
+                    .sort();
+                const nums = prods.map(p => p.replace(/^[^\d]*/, ''));
+                if (nums.length === 0) return null;
+                if (nums.length === 1) return nums[0];
+                if (nums.length === 2) return nums.join('\n');          // always show both
+                if (nums.length <= 4)  return nums[0] + '\n' + nums[1] + '\n...'; // 3-4: show 2 + ...
+                // 5+: dynamic — fit as many as the bar height allows
+                const barPx = chartAreaH * (binCts[i] / yMax);
+                const maxLines = Math.max(2, Math.floor(barPx / 10));
+                if (nums.length <= maxLines) return nums.join('\n');
+                const show = Math.max(2, maxLines - 1);
+                return nums.slice(0, show).join('\n') + '\n...';
+            });
 
             if (rdistChart) { rdistChart.destroy(); rdistChart = null; }
             rdistChart = new Chart(document.getElementById('rdist-chart'), {
@@ -9065,18 +9095,12 @@ If your product does not yet have access, please ensure your artifacts are store
                                     anchor: 'end', align: 'top',
                                 },
                                 products: {
-                                    color: (ctx) => barBorder[ctx.dataIndex],
+                                    color: '#111',
                                     font: { size: 8, weight: '500' },
-                                    anchor: 'center', align: 'center',
+                                    anchor: 'center',
+                                    align: 'center',
                                     textAlign: 'center',
-                                    formatter: (v, ctx) => {
-                                        const prods = binProducts[ctx.dataIndex];
-                                        if (!prods || !prods.length) return null;
-                                        const shown = prods.slice(0, MAX_IN_BAR);
-                                        return prods.length > MAX_IN_BAR
-                                            ? shown.join('\n') + '\n...'
-                                            : shown.join('\n');
-                                    },
+                                    formatter: (v, ctx) => binLabels[ctx.dataIndex] ?? null,
                                 }
                             }
                         },
@@ -9101,8 +9125,14 @@ If your product does not yet have access, please ensure your artifacts are store
                         },
                         y: {
                             title: { display: true, text: 'products', color: '#888', font: { size: 11 } },
-                            ticks: { color: '#888', stepSize: 1 },
-                            grid: { color: 'rgba(128,128,128,.2)' }
+                            ticks: { color: '#888' },
+                            grid: { color: 'rgba(128,128,128,.2)' },
+                            grace: 0,
+                            afterBuildTicks(axis) {
+                                const max = axis.max;
+                                axis.ticks = [];
+                                for (let v = 0; v <= max; v += 3) axis.ticks.push({ value: v });
+                            }
                         }
                     }
                 }
@@ -9169,6 +9199,219 @@ If your product does not yet have access, please ensure your artifacts are store
                 </div>`;
             }).join('');
 
+            const copyBtn = document.querySelector('.rdist-drill-btn-copy');
+            if (copyBtn) { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }
+            document.getElementById('rdist-drill-overlay').classList.add('open');
+        }
+
+        function showRdistDrillOver(minCount) {
+            if (!rdistProductMap) return;
+            rdistCurrentCount = null;
+            const prods = Object.entries(rdistProductMap)
+                .filter(([, people]) => people.size > minCount)
+                .sort(([a], [b]) => a.localeCompare(b));
+
+            document.getElementById('rdist-drill-title').textContent =
+                `> ${minCount} unique ${rdistCurrentRole} · ${prods.length} product${prods.length !== 1 ? 's' : ''}`;
+            document.getElementById('rdist-drill-sub').textContent = 'Excluded from trimmed avg';
+
+            const cellMap = buildDrillCellMap();
+
+            document.getElementById('rdist-drill-body').innerHTML = prods.map(([prod, people]) => {
+                const cell = cellMap[prod] ? `<span class="rdist-drill-cell">${cellMap[prod]}</span>` : '';
+                let peopleHtml;
+                if (rdistRoleBreakdown && rdistRoleBreakdown[prod]) {
+                    const breakdown = rdistRoleBreakdown[prod];
+                    peopleHtml = Object.entries(breakdown)
+                        .filter(([, m]) => m.size > 0)
+                        .map(([roleName, m]) => `
+                        <div class="rdist-drill-role-group">
+                            <span class="rdist-drill-role-lbl">${roleName} (${m.size})</span>
+                            <div class="rdist-drill-eids">
+                                ${[...m.values()].sort().map(p => `<span class="rdist-drill-eid">${p}</span>`).join('')}
+                            </div>
+                        </div>`).join('');
+                } else {
+                    peopleHtml = `<div class="rdist-drill-eids">
+                        ${[...people.values()].sort().map(p => `<span class="rdist-drill-eid">${p}</span>`).join('')}
+                    </div>`;
+                }
+                return `
+                <div class="rdist-drill-prod">
+                    <div class="rdist-drill-prod-name">${prod}${cell} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(${people.size})</span></div>
+                    ${peopleHtml}
+                </div>`;
+            }).join('');
+
+            const copyBtn = document.querySelector('.rdist-drill-btn-copy');
+            if (copyBtn) { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }
+            document.getElementById('rdist-drill-overlay').classList.add('open');
+            renderRdistFilteredChart(n => n > minCount, `> ${minCount} unique ${rdistCurrentRole}`);
+        }
+
+        function showRdistDrillUpTo(maxCount) {
+            if (!rdistProductMap) return;
+            rdistCurrentCount = null;
+            const prods = Object.entries(rdistProductMap)
+                .filter(([, people]) => people.size <= maxCount)
+                .sort(([a], [b]) => a.localeCompare(b));
+
+            document.getElementById('rdist-drill-title').textContent =
+                `≤ ${maxCount} unique ${rdistCurrentRole} · ${prods.length} product${prods.length !== 1 ? 's' : ''}`;
+            document.getElementById('rdist-drill-sub').textContent = '';
+
+            const cellMap = buildDrillCellMap();
+
+            document.getElementById('rdist-drill-body').innerHTML = prods.map(([prod, people]) => {
+                const cell = cellMap[prod] ? `<span class="rdist-drill-cell">${cellMap[prod]}</span>` : '';
+                let peopleHtml;
+                if (rdistRoleBreakdown && rdistRoleBreakdown[prod]) {
+                    const breakdown = rdistRoleBreakdown[prod];
+                    peopleHtml = Object.entries(breakdown)
+                        .filter(([, m]) => m.size > 0)
+                        .map(([roleName, m]) => `
+                        <div class="rdist-drill-role-group">
+                            <span class="rdist-drill-role-lbl">${roleName} (${m.size})</span>
+                            <div class="rdist-drill-eids">
+                                ${[...m.values()].sort().map(p => `<span class="rdist-drill-eid">${p}</span>`).join('')}
+                            </div>
+                        </div>`).join('');
+                } else {
+                    peopleHtml = `<div class="rdist-drill-eids">
+                        ${[...people.values()].sort().map(p => `<span class="rdist-drill-eid">${p}</span>`).join('')}
+                    </div>`;
+                }
+                return `
+                <div class="rdist-drill-prod">
+                    <div class="rdist-drill-prod-name">${prod}${cell} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(${people.size})</span></div>
+                    ${peopleHtml}
+                </div>`;
+            }).join('');
+
+            const copyBtn = document.querySelector('.rdist-drill-btn-copy');
+            if (copyBtn) { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }
+            document.getElementById('rdist-drill-overlay').classList.add('open');
+            renderRdistFilteredChart(n => n <= maxCount, `≤ ${maxCount} unique ${rdistCurrentRole}`);
+        }
+
+        const RDIST_PAGE_SIZE = 30;
+
+        function renderRdistFilteredChart(filterFn, filterLabel) {
+            if (!rdistProductMap) return;
+
+            // Destroy current charts
+            if (rdistChart) { rdistChart.destroy(); rdistChart = null; }
+            rdistExtraCharts.forEach(c => c.destroy());
+            rdistExtraCharts = [];
+            rdistFilteredView = true;
+
+            const filteredProds = Object.entries(rdistProductMap)
+                .filter(([, m]) => filterFn(m.size))
+                .sort(([, a], [, b]) => b.size - a.size); // desc by count
+
+            const wrap = document.querySelector('.rdist-chart-wrap');
+            wrap.style.height = 'auto';
+            wrap.innerHTML = `
+                <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <button onclick="window.rdistResetView()" style="font-size:11px;background:none;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;padding:3px 10px;color:var(--text-secondary)">← Distribución</button>
+                    <span style="font-size:12px;color:var(--text-muted)">${filterLabel} · ${filteredProds.length} producto${filteredProds.length !== 1 ? 's' : ''}</span>
+                </div>`;
+
+            if (!filteredProds.length) {
+                wrap.innerHTML += '<div style="font-size:13px;color:var(--text-muted);padding:8px 0">No hay productos en este rango.</div>';
+                return;
+            }
+
+            const pages = [];
+            for (let i = 0; i < filteredProds.length; i += RDIST_PAGE_SIZE) pages.push(filteredProds.slice(i, i + RDIST_PAGE_SIZE));
+
+            const cellMap = buildDrillCellMap();
+
+            pages.forEach((page, pi) => {
+                const div = document.createElement('div');
+                div.style.cssText = `position:relative;height:300px;${pi > 0 ? 'margin-top:20px' : ''}`;
+                if (pages.length > 1) {
+                    const lbl = document.createElement('div');
+                    lbl.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:4px';
+                    lbl.textContent = `${pi * RDIST_PAGE_SIZE + 1}–${Math.min((pi + 1) * RDIST_PAGE_SIZE, filteredProds.length)} de ${filteredProds.length}`;
+                    wrap.appendChild(lbl);
+                }
+                const canvas = document.createElement('canvas');
+                div.appendChild(canvas);
+                wrap.appendChild(div);
+
+                const labels  = page.map(([pid]) => pid.replace(/^[^\d]*/, ''));
+                const fullIds = page.map(([pid]) => pid);
+                const data    = page.map(([, m]) => m.size);
+                const fills   = data.map(v => v > 10 ? '#e74c3c55' : '#00c9a744');
+                const borders = data.map(v => v > 10 ? '#e74c3c'   : '#00c9a7');
+
+                const chart = new Chart(canvas, {
+                    type: 'bar',
+                    data: { labels, datasets: [{ data, backgroundColor: fills, borderColor: borders, borderWidth: 1, borderRadius: 4, minBarLength: 8 }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        layout: { padding: { top: 20 } },
+                        onClick: (evt, els) => { if (!els.length) return; showRdistDrillForProduct(fullIds[els[0].index]); },
+                        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                color: ctx => borders[ctx.dataIndex],
+                                font: { size: 10, weight: '600' },
+                                formatter: v => v,
+                                anchor: 'end', align: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: ctx => {
+                                        const pid = fullIds[ctx[0].dataIndex];
+                                        const cell = cellMap[pid] ? ` (${cellMap[pid]})` : '';
+                                        return pid + cell;
+                                    },
+                                    label: ctx => `${ctx.raw} unique ${rdistCurrentRole}`,
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#888', font: { size: 9 }, maxRotation: 45 }, grid: { color: 'rgba(128,128,128,.2)' } },
+                            y: { ticks: { color: '#888' }, grid: { color: 'rgba(128,128,128,.2)' }, grace: 0 }
+                        }
+                    }
+                });
+
+                if (pi === 0) rdistChart = chart;
+                else rdistExtraCharts.push(chart);
+            });
+        }
+
+        function rdistResetView() {
+            if (rdistChart) { rdistChart.destroy(); rdistChart = null; }
+            rdistExtraCharts.forEach(c => c.destroy());
+            rdistExtraCharts = [];
+            rdistFilteredView = false;
+            const wrap = document.querySelector('.rdist-chart-wrap');
+            if (wrap) { wrap.style.height = '450px'; wrap.innerHTML = '<canvas id="rdist-chart"></canvas>'; }
+            if (rdistCurrentRole) renderRdistChart(rdistCurrentRole);
+        }
+
+        function showRdistDrillForProduct(pid) {
+            if (!rdistProductMap || !rdistProductMap[pid]) return;
+            const people = rdistProductMap[pid];
+            rdistCurrentCount = people.size;
+            document.getElementById('rdist-drill-title').textContent = `${pid} · ${people.size} unique ${rdistCurrentRole}`;
+            document.getElementById('rdist-drill-sub').textContent = people.size > 10 ? 'Excluded from trimmed avg (>10)' : '';
+            const cellMap = buildDrillCellMap();
+            const cell = cellMap[pid] ? `<span class="rdist-drill-cell">${cellMap[pid]}</span>` : '';
+            let peopleHtml;
+            if (rdistRoleBreakdown && rdistRoleBreakdown[pid]) {
+                peopleHtml = Object.entries(rdistRoleBreakdown[pid])
+                    .filter(([, m]) => m.size > 0)
+                    .map(([rn, m]) => `<div class="rdist-drill-role-group"><span class="rdist-drill-role-lbl">${rn} (${m.size})</span><div class="rdist-drill-eids">${[...m.values()].sort().map(p => `<span class="rdist-drill-eid">${p}</span>`).join('')}</div></div>`).join('');
+            } else {
+                peopleHtml = `<div class="rdist-drill-eids">${[...people.values()].sort().map(p => `<span class="rdist-drill-eid">${p}</span>`).join('')}</div>`;
+            }
+            document.getElementById('rdist-drill-body').innerHTML = `<div class="rdist-drill-prod"><div class="rdist-drill-prod-name">${pid}${cell}</div>${peopleHtml}</div>`;
             const copyBtn = document.querySelector('.rdist-drill-btn-copy');
             if (copyBtn) { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }
             document.getElementById('rdist-drill-overlay').classList.add('open');
@@ -9368,10 +9611,15 @@ If your product does not yet have access, please ensure your artifacts are store
 
             if (roleFilter && roleFilter !== 'all') {
                 renderRdistChart(roleFilter);
-            } else {
-                if (rdistChart) { rdistChart.destroy(); rdistChart = null; }
-                document.getElementById('rdist-stats').innerHTML =
-                    '<div style="color:var(--text-muted);font-size:13px;padding:6px 0">Select a role in the Role filter above to see the distribution.</div>';
+            } else if (file2Data && file2Data[0]) {
+                const h = file2Data[0].map(x => x ? x.toString().trim() : '');
+                const roleCols = h.filter(c => c && !RDIST_META_RE.test(c) && !/^[-–—\s]+$/.test(c));
+                if (roleCols.length) renderRdistChart(roleCols.join(','));
+                else {
+                    if (rdistChart) { rdistChart.destroy(); rdistChart = null; }
+                    document.getElementById('rdist-stats').innerHTML =
+                        '<div style="color:var(--text-muted);font-size:13px;padding:6px 0">Select a role in the Role filter above to see the distribution.</div>';
+                }
             }
         }
 
@@ -9437,6 +9685,10 @@ If your product does not yet have access, please ensure your artifacts are store
         window.rdistDrillPDF         = rdistDrillPDF;
         window.rdistDrillEmail       = rdistDrillEmail;
         window.syncRdistWithFilter   = syncRdistWithFilter;
+        window.showRdistDrillOver      = showRdistDrillOver;
+        window.showRdistDrillUpTo      = showRdistDrillUpTo;
+        window.rdistResetView          = rdistResetView;
+        window.showRdistDrillForProduct = showRdistDrillForProduct;
 
         })();
 
